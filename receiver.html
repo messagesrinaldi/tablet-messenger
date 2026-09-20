@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Message Receiver</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    background: #14181f;
+    color: #f5f5f5;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #waiting {
+    font-size: 1.4em;
+    color: #6b7280;
+  }
+  #message-box {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px;
+    max-width: 90%;
+  }
+  #message-text {
+    font-size: 3em;
+    line-height: 1.3;
+    margin-bottom: 50px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  #ack-button {
+    font-size: 1.6em;
+    padding: 22px 70px;
+    background: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+  #ack-button:active {
+    background: #1b5e20;
+  }
+  #status {
+    position: fixed;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.75em;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+
+<div id="waiting">Waiting for a message&hellip;</div>
+
+<div id="message-box">
+  <div id="message-text"></div>
+  <button id="ack-button">Acknowledge</button>
+</div>
+
+<div id="status">connecting&hellip;</div>
+
+<script>
+  // ---- PASTE YOUR FIREBASE CONFIG HERE ----
+// Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhPPm0i-8lqK_BWFYg0mytHI2Ef-dAuSo",
+    authDomain: "tablet-messenger-rinaldi.firebaseapp.com",
+    projectId: "tablet-messenger-rinaldi",
+    storageBucket: "tablet-messenger-rinaldi.firebasestorage.app",
+    messagingSenderId: "1060203781816",
+    appId: "1:1060203781816:web:fb626e04536a6e3befde4d"
+  };
+  // ------------------------------------------
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection("messages").doc("current");
+
+  const waitingEl = document.getElementById("waiting");
+  const boxEl = document.getElementById("message-box");
+  const textEl = document.getElementById("message-text");
+  const buttonEl = document.getElementById("ack-button");
+  const statusEl = document.getElementById("status");
+
+  function showWaiting() {
+    waitingEl.style.display = "block";
+    boxEl.style.display = "none";
+  }
+
+  function showMessage(text) {
+    textEl.textContent = text;
+    waitingEl.style.display = "none";
+    boxEl.style.display = "flex";
+  }
+
+  docRef.onSnapshot(
+    (doc) => {
+      statusEl.textContent = "connected";
+      if (!doc.exists) {
+        showWaiting();
+        return;
+      }
+      const data = doc.data();
+      if (data.text && data.acknowledged === false) {
+        showMessage(data.text);
+      } else {
+        showWaiting();
+      }
+    },
+    (error) => {
+      statusEl.textContent = "connection error";
+      console.error(error);
+    }
+  );
+
+  buttonEl.addEventListener("click", () => {
+    docRef.update({ acknowledged: true }).catch((err) => console.error(err));
+  });
+
+  // Keep the screen from dimming/locking while this page is open, on
+  // browsers that support the Wake Lock API (most recent Chrome on Android).
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        await navigator.wakeLock.request("screen");
+      }
+    } catch (err) {
+      console.warn("Wake lock not available:", err);
+    }
+  }
+  requestWakeLock();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") requestWakeLock();
+  });
+</script>
+
+</body>
+</html>
