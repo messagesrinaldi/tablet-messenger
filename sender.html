@@ -19,6 +19,13 @@
     font-weight: 600;
     margin-bottom: 20px;
   }
+  h3 {
+    font-weight: 600;
+    font-size: 1em;
+    text-align: left;
+    margin: 30px 0 10px;
+    color: #555;
+  }
   textarea {
     width: 100%;
     height: 120px;
@@ -51,13 +58,33 @@
     font-size: 1em;
     color: #2e7d32;
   }
-  #ack-info {
-    margin-top: 28px;
-    padding: 14px;
-    border-radius: 10px;
+  #history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+  }
+  #history-list li {
+    padding: 10px 12px;
+    border-radius: 8px;
     background: #f2f2f2;
-    font-size: 1em;
-    min-height: 1.4em;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  #history-list .msg-text {
+    word-break: break-word;
+  }
+  #history-list .msg-time {
+    color: #777;
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+  #history-empty {
+    color: #888;
+    font-size: 0.9em;
   }
 </style>
 </head>
@@ -68,7 +95,9 @@
 <button id="send-button">Send</button>
 <div id="status"></div>
 
-<div id="ack-info">No message sent yet</div>
+<h3>Last 20 messages</h3>
+<ul id="history-list"></ul>
+<div id="history-empty" style="display:none;">No messages sent yet</div>
 
 <script>
   const firebaseConfig = {
@@ -82,20 +111,21 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  const docRef = db.collection("messages").doc("current");
+  const messagesRef = db.collection("messages");
 
   const inputEl = document.getElementById("message-input");
   const buttonEl = document.getElementById("send-button");
   const statusEl = document.getElementById("status");
-  const ackInfoEl = document.getElementById("ack-info");
+  const historyListEl = document.getElementById("history-list");
+  const historyEmptyEl = document.getElementById("history-empty");
 
   buttonEl.addEventListener("click", () => {
     const msg = inputEl.value.trim();
     if (!msg) return;
 
     buttonEl.disabled = true;
-    docRef
-      .set({ text: msg, acknowledged: false, sentAt: Date.now() })
+    messagesRef
+      .add({ text: msg, acknowledged: false, sentAt: Date.now() })
       .then(() => {
         statusEl.textContent = "Sent!";
         inputEl.value = "";
@@ -111,32 +141,37 @@
       });
   });
 
-  // Live status of the current message, so you can see when it's been
-  // acknowledged on the tablet without needing to refresh.
-  docRef.onSnapshot(
-    (doc) => {
-      if (!doc.exists) {
-        ackInfoEl.textContent = "No message sent yet";
-        ackInfoEl.style.background = "#f2f2f2";
-        ackInfoEl.style.color = "#1a1a1a";
+  // Live list of the last 20 messages, newest first, with acknowledgement status.
+  messagesRef.orderBy("sentAt", "desc").limit(20).onSnapshot(
+    (snapshot) => {
+      historyListEl.innerHTML = "";
+
+      if (snapshot.empty) {
+        historyEmptyEl.style.display = "block";
         return;
       }
-      const data = doc.data();
-      if (!data.text) {
-        ackInfoEl.textContent = "No message sent yet";
-        ackInfoEl.style.background = "#f2f2f2";
-        ackInfoEl.style.color = "#1a1a1a";
-        return;
-      }
-      if (data.acknowledged) {
-        ackInfoEl.textContent = '✓ Acknowledged: "' + data.text + '"';
-        ackInfoEl.style.background = "#e8f5e9";
-        ackInfoEl.style.color = "#2e7d32";
-      } else {
-        ackInfoEl.textContent = '⏳ Waiting for acknowledgement: "' + data.text + '"';
-        ackInfoEl.style.background = "#fff3e0";
-        ackInfoEl.style.color = "#ef6c00";
-      }
+      historyEmptyEl.style.display = "none";
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const li = document.createElement("li");
+
+        const textSpan = document.createElement("span");
+        textSpan.className = "msg-text";
+        const icon = data.acknowledged ? "✓" : "⏳";
+        textSpan.textContent = icon + " " + data.text;
+        textSpan.style.color = data.acknowledged ? "#2e7d32" : "#ef6c00";
+
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "msg-time";
+        timeSpan.textContent = data.sentAt
+          ? new Date(data.sentAt).toLocaleString()
+          : "";
+
+        li.appendChild(textSpan);
+        li.appendChild(timeSpan);
+        historyListEl.appendChild(li);
+      });
     },
     (error) => {
       console.error(error);

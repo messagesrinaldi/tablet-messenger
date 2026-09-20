@@ -84,13 +84,15 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  const docRef = db.collection("messages").doc("current");
+  const messagesRef = db.collection("messages");
 
   const waitingEl = document.getElementById("waiting");
   const boxEl = document.getElementById("message-box");
   const textEl = document.getElementById("message-text");
   const buttonEl = document.getElementById("ack-button");
   const statusEl = document.getElementById("status");
+
+  let currentDocId = null;
 
   function showWaiting() {
     waitingEl.style.display = "block";
@@ -103,14 +105,18 @@
     boxEl.style.display = "flex";
   }
 
-  docRef.onSnapshot(
-    (doc) => {
+  // Always watch the single most recently sent message.
+  messagesRef.orderBy("sentAt", "desc").limit(1).onSnapshot(
+    (snapshot) => {
       statusEl.textContent = "connected";
-      if (!doc.exists) {
+      if (snapshot.empty) {
+        currentDocId = null;
         showWaiting();
         return;
       }
+      const doc = snapshot.docs[0];
       const data = doc.data();
+      currentDocId = doc.id;
       if (data.text && data.acknowledged === false) {
         showMessage(data.text);
       } else {
@@ -124,7 +130,11 @@
   );
 
   buttonEl.addEventListener("click", () => {
-    docRef.update({ acknowledged: true }).catch((err) => console.error(err));
+    if (!currentDocId) return;
+    messagesRef
+      .doc(currentDocId)
+      .update({ acknowledged: true })
+      .catch((err) => console.error(err));
   });
 
   // Keep the screen from dimming/locking while this page is open, on
