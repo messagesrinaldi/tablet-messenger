@@ -26,6 +26,31 @@
     margin: 30px 0 10px;
     color: #555;
   }
+  #lock-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-top: 80px;
+  }
+  #lock-screen input {
+    font-size: 1.3em;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    text-align: center;
+    width: 220px;
+  }
+  #lock-screen button {
+    font-size: 1.1em;
+    padding: 12px 34px;
+  }
+  #lock-error {
+    color: #c62828;
+    font-size: 0.9em;
+    min-height: 1.2em;
+  }
+  #app { display: none; }
   textarea {
     width: 100%;
     height: 120px;
@@ -101,16 +126,31 @@
 </head>
 <body>
 
-<h2>Send a message to the tablet</h2>
-<textarea id="message-input" placeholder="Type your message..."></textarea><br>
-<button id="send-button">Send</button>
-<div id="status"></div>
+<div id="lock-screen">
+  <div style="font-size:1.1em;">Enter password</div>
+  <input type="password" id="password-input" autofocus>
+  <button id="unlock-button">Unlock</button>
+  <div id="lock-error"></div>
+</div>
 
-<h3>Last 20 messages</h3>
-<ul id="history-list"></ul>
-<div id="history-empty" style="display:none;">No messages sent yet</div>
+<div id="app">
+  <h2>Send a message to the tablet</h2>
+  <textarea id="message-input" placeholder="Type your message..."></textarea><br>
+  <button id="send-button">Send</button>
+  <div id="status"></div>
+
+  <h3>Last 20 messages</h3>
+  <ul id="history-list"></ul>
+  <div id="history-empty" style="display:none;">No messages sent yet</div>
+</div>
 
 <script>
+  // ---- Set the same password here, in receiver.html, and in your Firestore rules ----
+  const APP_PASSWORD = "moonshine98";
+  // How many days to keep messages before they're auto-deleted.
+  const RETENTION_DAYS = 30;
+  // -------------------------------------------------------------------------------------
+
   const firebaseConfig = {
     apiKey: "AIzaSyDhPPm0i-8lqK_BWFYg0mytHI2Ef-dAuSo",
     authDomain: "tablet-messenger-rinaldi.firebaseapp.com",
@@ -123,6 +163,12 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
   const messagesRef = db.collection("messages");
+
+  const lockScreenEl = document.getElementById("lock-screen");
+  const appEl = document.getElementById("app");
+  const passwordInputEl = document.getElementById("password-input");
+  const unlockButtonEl = document.getElementById("unlock-button");
+  const lockErrorEl = document.getElementById("lock-error");
 
   const inputEl = document.getElementById("message-input");
   const buttonEl = document.getElementById("send-button");
@@ -138,78 +184,130 @@
     "Call Me": "#ef6c00"
   };
 
-  buttonEl.addEventListener("click", () => {
-    const msg = inputEl.value.trim();
-    if (!msg) return;
+  let started = false;
 
-    buttonEl.disabled = true;
-    messagesRef
-      .add({ text: msg, acknowledged: false, response: null, sentAt: Date.now() })
-      .then(() => {
-        statusEl.textContent = "Sent!";
-        inputEl.value = "";
-        setTimeout(() => (statusEl.textContent = ""), 2000);
-      })
-      .catch((err) => {
-        statusEl.style.color = "#c62828";
-        statusEl.textContent = "Failed to send — check your connection.";
-        console.error(err);
-      })
-      .finally(() => {
-        buttonEl.disabled = false;
-      });
+  function unlock() {
+    lockScreenEl.style.display = "none";
+    appEl.style.display = "block";
+    localStorage.setItem("tabletMessengerUnlocked", "true");
+    if (!started) {
+      started = true;
+      startApp();
+    }
+  }
+
+  function tryUnlock() {
+    if (passwordInputEl.value === APP_PASSWORD) {
+      unlock();
+    } else {
+      lockErrorEl.textContent = "Incorrect password";
+    }
+  }
+
+  unlockButtonEl.addEventListener("click", tryUnlock);
+  passwordInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") tryUnlock();
   });
 
-  // Live list of the last 20 messages, newest first, with response status.
-  messagesRef.orderBy("sentAt", "desc").limit(20).onSnapshot(
-    (snapshot) => {
-      historyListEl.innerHTML = "";
+  if (localStorage.getItem("tabletMessengerUnlocked") === "true") {
+    unlock();
+  }
 
-      if (snapshot.empty) {
-        historyEmptyEl.style.display = "block";
-        return;
-      }
-      historyEmptyEl.style.display = "none";
+  function deleteOldMessages() {
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    messagesRef
+      .where("sentAt", "<", cutoff)
+      .get()
+      .then((snapshot) => {
+        snapshot.forEach((doc) => {
+          doc.ref.delete().catch((err) => console.warn("Could not delete old message:", err));
+        });
+      })
+      .catch((err) => console.warn("Cleanup query failed:", err));
+  }
 
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const li = document.createElement("li");
+  function startApp() {
+    deleteOldMessages();
 
-        const textSpan = document.createElement("span");
-        textSpan.className = "msg-text";
-        textSpan.textContent = data.text;
+    buttonEl.addEventListener("click", () => {
+      const msg = inputEl.value.trim();
+      if (!msg) return;
 
-        const rightDiv = document.createElement("div");
-        rightDiv.className = "msg-right";
+      buttonEl.disabled = true;
+      messagesRef
+        .add({
+          text: msg,
+          acknowledged: false,
+          response: null,
+          sentAt: Date.now(),
+          passcode: APP_PASSWORD
+        })
+        .then(() => {
+          statusEl.textContent = "Sent!";
+          inputEl.value = "";
+          setTimeout(() => (statusEl.textContent = ""), 2000);
+        })
+        .catch((err) => {
+          statusEl.style.color = "#c62828";
+          statusEl.textContent = "Failed to send — check your connection.";
+          console.error(err);
+        })
+        .finally(() => {
+          buttonEl.disabled = false;
+        });
+    });
 
-        const responseSpan = document.createElement("span");
-        responseSpan.className = "msg-response";
-        if (data.acknowledged && data.response) {
-          responseSpan.textContent = data.response;
-          responseSpan.style.color = RESPONSE_COLORS[data.response] || "#2e7d32";
-        } else {
-          responseSpan.textContent = "⏳ Waiting";
-          responseSpan.style.color = "#999";
+    // Live list of the last 20 messages, newest first, with response status.
+    messagesRef.orderBy("sentAt", "desc").limit(20).onSnapshot(
+      (snapshot) => {
+        historyListEl.innerHTML = "";
+
+        if (snapshot.empty) {
+          historyEmptyEl.style.display = "block";
+          return;
         }
+        historyEmptyEl.style.display = "none";
 
-        const timeSpan = document.createElement("span");
-        timeSpan.className = "msg-time";
-        timeSpan.textContent = data.sentAt
-          ? new Date(data.sentAt).toLocaleString()
-          : "";
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const li = document.createElement("li");
 
-        rightDiv.appendChild(responseSpan);
-        rightDiv.appendChild(timeSpan);
+          const textSpan = document.createElement("span");
+          textSpan.className = "msg-text";
+          textSpan.textContent = data.text;
 
-        li.appendChild(textSpan);
-        li.appendChild(rightDiv);
-        historyListEl.appendChild(li);
-      });
-    },
-    (error) => {
-      console.error(error);
-    }
-  );
+          const rightDiv = document.createElement("div");
+          rightDiv.className = "msg-right";
+
+          const responseSpan = document.createElement("span");
+          responseSpan.className = "msg-response";
+          if (data.acknowledged && data.response) {
+            responseSpan.textContent = data.response;
+            responseSpan.style.color = RESPONSE_COLORS[data.response] || "#2e7d32";
+          } else {
+            responseSpan.textContent = "⏳ Waiting";
+            responseSpan.style.color = "#999";
+          }
+
+          const timeSpan = document.createElement("span");
+          timeSpan.className = "msg-time";
+          timeSpan.textContent = data.sentAt
+            ? new Date(data.sentAt).toLocaleString()
+            : "";
+
+          rightDiv.appendChild(responseSpan);
+          rightDiv.appendChild(timeSpan);
+
+          li.appendChild(textSpan);
+          li.appendChild(rightDiv);
+          historyListEl.appendChild(li);
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
+  }
 </script>
 
 </body>

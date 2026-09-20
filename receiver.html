@@ -22,6 +22,35 @@
     justify-content: center;
     text-align: center;
   }
+  #lock-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  #lock-screen input {
+    font-size: 1.6em;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: none;
+    text-align: center;
+    width: 260px;
+  }
+  #lock-screen button {
+    font-size: 1.4em;
+    padding: 14px 40px;
+    background: #1565c0;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #lock-error {
+    color: #ef5350;
+    font-size: 1em;
+    min-height: 1.2em;
+  }
+  #app { display: none; }
   #waiting {
     font-size: 1.4em;
     color: #6b7280;
@@ -73,21 +102,34 @@
 </head>
 <body>
 
-<div id="waiting">Waiting for a message&hellip;</div>
+<div id="lock-screen">
+  <div style="font-size:1.3em;">Enter password</div>
+  <input type="password" id="password-input" autofocus>
+  <button id="unlock-button">Unlock</button>
+  <div id="lock-error"></div>
+</div>
 
-<div id="message-box">
-  <div id="message-text"></div>
-  <div id="button-row">
-    <button id="btn-yes" class="response-button" data-response="Yes">Yes</button>
-    <button id="btn-no" class="response-button" data-response="No">No</button>
-    <button id="btn-ok" class="response-button" data-response="OK">OK</button>
-    <button id="btn-callme" class="response-button" data-response="Call Me">Call Me</button>
+<div id="app">
+  <div id="waiting">Waiting for a message&hellip;</div>
+
+  <div id="message-box">
+    <div id="message-text"></div>
+    <div id="button-row">
+      <button id="btn-yes" class="response-button" data-response="Yes">Yes</button>
+      <button id="btn-no" class="response-button" data-response="No">No</button>
+      <button id="btn-ok" class="response-button" data-response="OK">OK</button>
+      <button id="btn-callme" class="response-button" data-response="Call Me">Call Me</button>
+    </div>
   </div>
 </div>
 
 <div id="status">connecting&hellip;</div>
 
 <script>
+  // ---- Set the same password here, in sender.html, and in your Firestore rules ----
+  const APP_PASSWORD = "moonshine98";
+  // -----------------------------------------------------------------------------------
+
   const firebaseConfig = {
     apiKey: "AIzaSyDhPPm0i-8lqK_BWFYg0mytHI2Ef-dAuSo",
     authDomain: "tablet-messenger-rinaldi.firebaseapp.com",
@@ -101,6 +143,12 @@
   const db = firebase.firestore();
   const messagesRef = db.collection("messages");
 
+  const lockScreenEl = document.getElementById("lock-screen");
+  const appEl = document.getElementById("app");
+  const passwordInputEl = document.getElementById("password-input");
+  const unlockButtonEl = document.getElementById("unlock-button");
+  const lockErrorEl = document.getElementById("lock-error");
+
   const waitingEl = document.getElementById("waiting");
   const boxEl = document.getElementById("message-box");
   const textEl = document.getElementById("message-text");
@@ -108,6 +156,34 @@
   const responseButtons = document.querySelectorAll(".response-button");
 
   let currentDocId = null;
+  let started = false;
+
+  function unlock() {
+    lockScreenEl.style.display = "none";
+    appEl.style.display = "block";
+    localStorage.setItem("tabletMessengerUnlocked", "true");
+    if (!started) {
+      started = true;
+      startListening();
+    }
+  }
+
+  function tryUnlock() {
+    if (passwordInputEl.value === APP_PASSWORD) {
+      unlock();
+    } else {
+      lockErrorEl.textContent = "Incorrect password";
+    }
+  }
+
+  unlockButtonEl.addEventListener("click", tryUnlock);
+  passwordInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") tryUnlock();
+  });
+
+  if (localStorage.getItem("tabletMessengerUnlocked") === "true") {
+    unlock();
+  }
 
   function showWaiting() {
     waitingEl.style.display = "block";
@@ -120,56 +196,58 @@
     boxEl.style.display = "flex";
   }
 
-  // Always watch the single most recently sent message.
-  messagesRef.orderBy("sentAt", "desc").limit(1).onSnapshot(
-    (snapshot) => {
-      statusEl.textContent = "connected";
-      if (snapshot.empty) {
-        currentDocId = null;
-        showWaiting();
-        return;
+  function startListening() {
+    // Always watch the single most recently sent message.
+    messagesRef.orderBy("sentAt", "desc").limit(1).onSnapshot(
+      (snapshot) => {
+        statusEl.textContent = "connected";
+        if (snapshot.empty) {
+          currentDocId = null;
+          showWaiting();
+          return;
+        }
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        currentDocId = doc.id;
+        if (data.text && data.acknowledged === false) {
+          showMessage(data.text);
+        } else {
+          showWaiting();
+        }
+      },
+      (error) => {
+        statusEl.textContent = "connection error";
+        console.error(error);
       }
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      currentDocId = doc.id;
-      if (data.text && data.acknowledged === false) {
-        showMessage(data.text);
-      } else {
-        showWaiting();
-      }
-    },
-    (error) => {
-      statusEl.textContent = "connection error";
-      console.error(error);
-    }
-  );
+    );
 
-  responseButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (!currentDocId) return;
-      const response = btn.dataset.response;
-      messagesRef
-        .doc(currentDocId)
-        .update({ acknowledged: true, response: response })
-        .catch((err) => console.error(err));
+    responseButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!currentDocId) return;
+        const response = btn.dataset.response;
+        messagesRef
+          .doc(currentDocId)
+          .update({ acknowledged: true, response: response })
+          .catch((err) => console.error(err));
+      });
     });
-  });
 
-  // Keep the screen from dimming/locking while this page is open, on
-  // browsers that support the Wake Lock API (most recent Chrome on Android).
-  async function requestWakeLock() {
-    try {
-      if ("wakeLock" in navigator) {
-        await navigator.wakeLock.request("screen");
+    // Keep the screen from dimming/locking while this page is open, on
+    // browsers that support the Wake Lock API (most recent Chrome on Android).
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          await navigator.wakeLock.request("screen");
+        }
+      } catch (err) {
+        console.warn("Wake lock not available:", err);
       }
-    } catch (err) {
-      console.warn("Wake lock not available:", err);
     }
+    requestWakeLock();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    });
   }
-  requestWakeLock();
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") requestWakeLock();
-  });
 </script>
 
 </body>
