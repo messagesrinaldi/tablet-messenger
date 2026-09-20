@@ -72,15 +72,26 @@
     font-size: 0.95em;
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 10px;
   }
   #history-list .msg-text {
     word-break: break-word;
   }
+  #history-list .msg-response {
+    font-weight: 600;
+    white-space: nowrap;
+  }
   #history-list .msg-time {
     color: #777;
     font-size: 0.85em;
     white-space: nowrap;
+  }
+  #history-list .msg-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
   }
   #history-empty {
     color: #888;
@@ -119,13 +130,21 @@
   const historyListEl = document.getElementById("history-list");
   const historyEmptyEl = document.getElementById("history-empty");
 
+  // Color for each possible response, so it's easy to scan the list.
+  const RESPONSE_COLORS = {
+    Yes: "#2e7d32",
+    No: "#c62828",
+    OK: "#1565c0",
+    "Call Me": "#ef6c00"
+  };
+
   buttonEl.addEventListener("click", () => {
     const msg = inputEl.value.trim();
     if (!msg) return;
 
     buttonEl.disabled = true;
     messagesRef
-      .add({ text: msg, acknowledged: false, sentAt: Date.now() })
+      .add({ text: msg, acknowledged: false, response: null, sentAt: Date.now() })
       .then(() => {
         statusEl.textContent = "Sent!";
         inputEl.value = "";
@@ -141,7 +160,7 @@
       });
   });
 
-  // Live list of the last 20 messages, newest first, with acknowledgement status.
+  // Live list of the last 20 messages, newest first, with response status.
   messagesRef.orderBy("sentAt", "desc").limit(20).onSnapshot(
     (snapshot) => {
       historyListEl.innerHTML = "";
@@ -158,9 +177,20 @@
 
         const textSpan = document.createElement("span");
         textSpan.className = "msg-text";
-        const icon = data.acknowledged ? "✓" : "⏳";
-        textSpan.textContent = icon + " " + data.text;
-        textSpan.style.color = data.acknowledged ? "#2e7d32" : "#ef6c00";
+        textSpan.textContent = data.text;
+
+        const rightDiv = document.createElement("div");
+        rightDiv.className = "msg-right";
+
+        const responseSpan = document.createElement("span");
+        responseSpan.className = "msg-response";
+        if (data.acknowledged && data.response) {
+          responseSpan.textContent = data.response;
+          responseSpan.style.color = RESPONSE_COLORS[data.response] || "#2e7d32";
+        } else {
+          responseSpan.textContent = "⏳ Waiting";
+          responseSpan.style.color = "#999";
+        }
 
         const timeSpan = document.createElement("span");
         timeSpan.className = "msg-time";
@@ -168,8 +198,11 @@
           ? new Date(data.sentAt).toLocaleString()
           : "";
 
+        rightDiv.appendChild(responseSpan);
+        rightDiv.appendChild(timeSpan);
+
         li.appendChild(textSpan);
-        li.appendChild(timeSpan);
+        li.appendChild(rightDiv);
         historyListEl.appendChild(li);
       });
     },

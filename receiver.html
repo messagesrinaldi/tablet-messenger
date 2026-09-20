@@ -40,18 +40,28 @@
     word-wrap: break-word;
     white-space: pre-wrap;
   }
-  #ack-button {
-    font-size: 1.6em;
-    padding: 22px 70px;
-    background: #2e7d32;
+  #button-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+  }
+  .response-button {
+    font-size: 1.5em;
+    padding: 22px 44px;
     color: white;
     border: none;
     border-radius: 14px;
     cursor: pointer;
+    min-width: 160px;
   }
-  #ack-button:active {
-    background: #1b5e20;
+  .response-button:active {
+    filter: brightness(0.85);
   }
+  #btn-yes { background: #2e7d32; }
+  #btn-no { background: #c62828; }
+  #btn-ok { background: #1565c0; }
+  #btn-callme { background: #ef6c00; }
   #status {
     position: fixed;
     bottom: 10px;
@@ -67,7 +77,12 @@
 
 <div id="message-box">
   <div id="message-text"></div>
-  <button id="ack-button">Acknowledge</button>
+  <div id="button-row">
+    <button id="btn-yes" class="response-button" data-response="Yes">Yes</button>
+    <button id="btn-no" class="response-button" data-response="No">No</button>
+    <button id="btn-ok" class="response-button" data-response="OK">OK</button>
+    <button id="btn-callme" class="response-button" data-response="Call Me">Call Me</button>
+  </div>
 </div>
 
 <div id="status">connecting&hellip;</div>
@@ -89,8 +104,8 @@
   const waitingEl = document.getElementById("waiting");
   const boxEl = document.getElementById("message-box");
   const textEl = document.getElementById("message-text");
-  const buttonEl = document.getElementById("ack-button");
   const statusEl = document.getElementById("status");
+  const responseButtons = document.querySelectorAll(".response-button");
 
   let currentDocId = null;
 
@@ -129,12 +144,15 @@
     }
   );
 
-  buttonEl.addEventListener("click", () => {
-    if (!currentDocId) return;
-    messagesRef
-      .doc(currentDocId)
-      .update({ acknowledged: true })
-      .catch((err) => console.error(err));
+  responseButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!currentDocId) return;
+      const response = btn.dataset.response;
+      messagesRef
+        .doc(currentDocId)
+        .update({ acknowledged: true, response: response })
+        .catch((err) => console.error(err));
+    });
   });
 
   // Keep the screen from dimming/locking while this page is open, on
