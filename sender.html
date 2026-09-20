@@ -51,6 +51,14 @@
     font-size: 1em;
     color: #2e7d32;
   }
+  #ack-info {
+    margin-top: 28px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #f2f2f2;
+    font-size: 1em;
+    min-height: 1.4em;
+  }
 </style>
 </head>
 <body>
@@ -59,6 +67,8 @@
 <textarea id="message-input" placeholder="Type your message..."></textarea><br>
 <button id="send-button">Send</button>
 <div id="status"></div>
+
+<div id="ack-info">No message sent yet</div>
 
 <script>
   const firebaseConfig = {
@@ -77,6 +87,7 @@
   const inputEl = document.getElementById("message-input");
   const buttonEl = document.getElementById("send-button");
   const statusEl = document.getElementById("status");
+  const ackInfoEl = document.getElementById("ack-info");
 
   buttonEl.addEventListener("click", () => {
     const msg = inputEl.value.trim();
@@ -99,6 +110,38 @@
         buttonEl.disabled = false;
       });
   });
+
+  // Live status of the current message, so you can see when it's been
+  // acknowledged on the tablet without needing to refresh.
+  docRef.onSnapshot(
+    (doc) => {
+      if (!doc.exists) {
+        ackInfoEl.textContent = "No message sent yet";
+        ackInfoEl.style.background = "#f2f2f2";
+        ackInfoEl.style.color = "#1a1a1a";
+        return;
+      }
+      const data = doc.data();
+      if (!data.text) {
+        ackInfoEl.textContent = "No message sent yet";
+        ackInfoEl.style.background = "#f2f2f2";
+        ackInfoEl.style.color = "#1a1a1a";
+        return;
+      }
+      if (data.acknowledged) {
+        ackInfoEl.textContent = '✓ Acknowledged: "' + data.text + '"';
+        ackInfoEl.style.background = "#e8f5e9";
+        ackInfoEl.style.color = "#2e7d32";
+      } else {
+        ackInfoEl.textContent = '⏳ Waiting for acknowledgement: "' + data.text + '"';
+        ackInfoEl.style.background = "#fff3e0";
+        ackInfoEl.style.color = "#ef6c00";
+      }
+    },
+    (error) => {
+      console.error(error);
+    }
+  );
 </script>
 
 </body>
