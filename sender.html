@@ -60,10 +60,7 @@
 <button id="send-button">Send</button>
 <div id="status"></div>
 
-
-// Your web app's Firebase configuration
 <script>
-  // ---- PASTE YOUR FIREBASE CONFIG HERE (same values as in receiver.html) ----
   const firebaseConfig = {
     apiKey: "AIzaSyDhPPm0i-8lqK_BWFYg0mytHI2Ef-dAuSo",
     authDomain: "tablet-messenger-rinaldi.firebaseapp.com",
@@ -72,7 +69,6 @@
     messagingSenderId: "1060203781816",
     appId: "1:1060203781816:web:fb626e04536a6e3befde4d"
   };
-  // -----------------------------------------------------------------------------
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
