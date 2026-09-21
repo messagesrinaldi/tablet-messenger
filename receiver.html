@@ -63,11 +63,24 @@
     width: 92vw;
     height: 88vh;
   }
-  #from-label {
-    font-size: clamp(1rem, 3vmin, 1.8rem);
-    color: #9aa3af;
+  #from-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 2vmin, 20px);
     margin-bottom: clamp(6px, 1.5vmin, 16px);
     flex-shrink: 0;
+  }
+  #from-photo {
+    display: none;
+    width: clamp(48px, 10vmin, 140px);
+    height: clamp(48px, 10vmin, 140px);
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  #from-name {
+    font-size: clamp(1rem, 3vmin, 1.8rem);
+    color: #9aa3af;
   }
   #text-wrapper {
     flex: 1;
@@ -128,7 +141,10 @@
   <div id="waiting">Waiting for a message&hellip;</div>
 
   <div id="message-box">
-    <div id="from-label"></div>
+    <div id="from-row">
+      <img id="from-photo" alt="">
+      <span id="from-name"></span>
+    </div>
     <div id="text-wrapper">
       <div id="message-text"></div>
     </div>
@@ -160,6 +176,7 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
   const messagesRef = db.collection("messages");
+  const sendersRef = db.collection("senders");
 
   const lockScreenEl = document.getElementById("lock-screen");
   const appEl = document.getElementById("app");
@@ -169,7 +186,8 @@
 
   const waitingEl = document.getElementById("waiting");
   const boxEl = document.getElementById("message-box");
-  const fromLabelEl = document.getElementById("from-label");
+  const fromPhotoEl = document.getElementById("from-photo");
+  const fromNameEl = document.getElementById("from-name");
   const textWrapperEl = document.getElementById("text-wrapper");
   const textEl = document.getElementById("message-text");
   const statusEl = document.getElementById("status");
@@ -237,10 +255,31 @@
 
   function showMessage(text, senderName) {
     textEl.textContent = text;
-    fromLabelEl.textContent = senderName ? "From " + senderName : "";
+    fromNameEl.textContent = senderName ? "From " + senderName : "";
     callMeButtonEl.textContent = senderName
       ? "📞 Ask " + senderName + " to call"
       : "📞 Please Call Me";
+
+    if (senderName) {
+      sendersRef
+        .doc(senderName.trim().toLowerCase())
+        .get()
+        .then((doc) => {
+          if (doc.exists && doc.data().photo) {
+            fromPhotoEl.src = doc.data().photo;
+            fromPhotoEl.style.display = "inline-block";
+          } else {
+            fromPhotoEl.style.display = "none";
+          }
+        })
+        .catch((err) => {
+          console.warn(err);
+          fromPhotoEl.style.display = "none";
+        });
+    } else {
+      fromPhotoEl.style.display = "none";
+    }
+
     waitingEl.style.display = "none";
     boxEl.style.display = "flex";
     // Give the browser a moment to lay out the box before measuring it.
