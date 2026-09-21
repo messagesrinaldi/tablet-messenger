@@ -59,30 +59,43 @@
     display: none;
     flex-direction: column;
     align-items: center;
-    padding: 40px;
-    max-width: 90%;
+    justify-content: space-between;
+    width: 92vw;
+    height: 88vh;
+  }
+  #text-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    overflow: hidden;
+    min-height: 0;
   }
   #message-text {
-    font-size: 5em;
     line-height: 1.25;
-    margin-bottom: 60px;
     word-wrap: break-word;
+    overflow-wrap: break-word;
     white-space: pre-wrap;
+    margin: 0;
+    max-width: 100%;
   }
   #button-row {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 28px;
+    gap: clamp(10px, 2.2vmin, 28px);
+    flex-shrink: 0;
+    padding-top: clamp(12px, 2vmin, 30px);
   }
   .response-button {
-    font-size: 2.4em;
-    padding: 34px 60px;
+    font-size: clamp(1rem, 4.2vmin, 2.4rem);
+    padding: clamp(14px, 2.8vmin, 34px) clamp(22px, 5.5vmin, 60px);
     color: white;
     border: none;
-    border-radius: 18px;
+    border-radius: clamp(8px, 1.6vmin, 18px);
     cursor: pointer;
-    min-width: 220px;
+    min-width: clamp(110px, 18vmin, 220px);
   }
   .response-button:active {
     filter: brightness(0.85);
@@ -113,7 +126,9 @@
   <div id="waiting">Waiting for a message&hellip;</div>
 
   <div id="message-box">
-    <div id="message-text"></div>
+    <div id="text-wrapper">
+      <div id="message-text"></div>
+    </div>
     <div id="button-row">
       <button id="btn-yes" class="response-button" data-response="Yes">Yes</button>
       <button id="btn-no" class="response-button" data-response="No">No</button>
@@ -151,12 +166,37 @@
 
   const waitingEl = document.getElementById("waiting");
   const boxEl = document.getElementById("message-box");
+  const textWrapperEl = document.getElementById("text-wrapper");
   const textEl = document.getElementById("message-text");
   const statusEl = document.getElementById("status");
   const responseButtons = document.querySelectorAll(".response-button");
 
   let currentDocId = null;
   let started = false;
+
+  function fitMessageText() {
+    if (!textWrapperEl.clientWidth || !textWrapperEl.clientHeight) return;
+
+    let fontSize = Math.min(window.innerWidth, window.innerHeight) * 0.16;
+    const minFontSize = 16;
+    textEl.style.fontSize = fontSize + "px";
+
+    let guard = 0;
+    while (
+      guard < 60 &&
+      fontSize > minFontSize &&
+      (textEl.scrollWidth > textWrapperEl.clientWidth ||
+        textEl.scrollHeight > textWrapperEl.clientHeight)
+    ) {
+      fontSize -= Math.max(2, fontSize * 0.04);
+      textEl.style.fontSize = fontSize + "px";
+      guard++;
+    }
+  }
+
+  window.addEventListener("resize", () => {
+    if (boxEl.style.display !== "none") fitMessageText();
+  });
 
   function unlock() {
     lockScreenEl.style.display = "none";
@@ -194,6 +234,8 @@
     textEl.textContent = text;
     waitingEl.style.display = "none";
     boxEl.style.display = "flex";
+    // Give the browser a moment to lay out the box before measuring it.
+    requestAnimationFrame(fitMessageText);
   }
 
   function startListening() {
