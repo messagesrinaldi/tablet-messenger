@@ -6,6 +6,7 @@
 <title>Message Receiver</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <style>
   html, body {
     margin: 0;
@@ -164,6 +165,13 @@
   const APP_PASSWORD = "moonshine98";
   // -----------------------------------------------------------------------------------
 
+  // ---- EmailJS settings, from your EmailJS dashboard ----
+  const EMAILJS_PUBLIC_KEY = "Qk_o5KFoOTOjHk4fk";
+  const EMAILJS_SERVICE_ID = "service_okbiyvp";
+  const EMAILJS_TEMPLATE_ID = "template_ygje01b";
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+  // ----------------------------------------------------------
+
   const firebaseConfig = {
     apiKey: "AIzaSyDhPPm0i-8lqK_BWFYg0mytHI2Ef-dAuSo",
     authDomain: "tablet-messenger-rinaldi.firebaseapp.com",
@@ -195,6 +203,9 @@
   const callMeButtonEl = document.getElementById("btn-callme");
 
   let currentDocId = null;
+  let currentSenderName = null;
+  let currentSenderEmail = null;
+  let currentMessageText = null;
   let started = false;
 
   function fitMessageText() {
@@ -260,6 +271,10 @@
       ? "📞 Ask " + senderName + " to call"
       : "📞 Please Call Me";
 
+    currentSenderName = senderName || null;
+    currentMessageText = text;
+    currentSenderEmail = null;
+
     if (senderName) {
       sendersRef
         .doc(senderName.trim().toLowerCase())
@@ -270,6 +285,9 @@
             fromPhotoEl.style.display = "inline-block";
           } else {
             fromPhotoEl.style.display = "none";
+          }
+          if (doc.exists && doc.data().email) {
+            currentSenderEmail = doc.data().email;
           }
         })
         .catch((err) => {
@@ -284,6 +302,18 @@
     boxEl.style.display = "flex";
     // Give the browser a moment to lay out the box before measuring it.
     requestAnimationFrame(fitMessageText);
+  }
+
+  function sendAcknowledgmentEmail(response) {
+    if (!currentSenderEmail) return;
+    emailjs
+      .send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: currentSenderEmail,
+        sender_name: currentSenderName || "",
+        message_text: currentMessageText || "",
+        response: response
+      })
+      .catch((err) => console.warn("Email notification failed:", err));
   }
 
   function startListening() {
@@ -319,6 +349,7 @@
           .doc(currentDocId)
           .update({ acknowledged: true, response: response })
           .catch((err) => console.error(err));
+        sendAcknowledgmentEmail(response);
       });
     });
 

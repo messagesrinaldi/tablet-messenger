@@ -88,6 +88,24 @@
     display: none;
     border: 1px solid #ccc;
   }
+  #email-field {
+    text-align: left;
+    margin-bottom: 16px;
+  }
+  #email-field label {
+    display: block;
+    font-size: 0.85em;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  #email-input {
+    width: 100%;
+    font-size: 1.1em;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
   textarea {
     width: 100%;
     height: 120px;
@@ -181,6 +199,10 @@
     <input type="file" id="photo-input" accept="image/*">
     <img id="photo-preview" alt="Your photo">
   </div>
+  <div id="email-field">
+    <label for="email-input">Your email (to get notified when acknowledged, saved once)</label>
+    <input type="email" id="email-input" placeholder="e.g. sarah@example.com">
+  </div>
   <textarea id="message-input" placeholder="Type your message..."></textarea><br>
   <button id="send-button">Send</button>
   <div id="status"></div>
@@ -221,6 +243,7 @@
   const nameInputEl = document.getElementById("name-input");
   const photoInputEl = document.getElementById("photo-input");
   const photoPreviewEl = document.getElementById("photo-preview");
+  const emailInputEl = document.getElementById("email-input");
   const buttonEl = document.getElementById("send-button");
   const statusEl = document.getElementById("status");
   const historyListEl = document.getElementById("history-list");
@@ -241,9 +264,26 @@
           photoPreviewEl.src = doc.data().photo;
           photoPreviewEl.style.display = "block";
         }
+        if (doc.exists && doc.data().email && !localStorage.getItem("tabletMessengerSenderEmail")) {
+          emailInputEl.value = doc.data().email;
+        }
       })
       .catch((err) => console.warn(err));
   }
+
+  const savedEmail = localStorage.getItem("tabletMessengerSenderEmail");
+  if (savedEmail) emailInputEl.value = savedEmail;
+
+  emailInputEl.addEventListener("blur", () => {
+    const name = nameInputEl.value.trim();
+    const email = emailInputEl.value.trim();
+    if (!name || !email) return;
+    localStorage.setItem("tabletMessengerSenderEmail", email);
+    sendersRef
+      .doc(nameKey(name))
+      .set({ name: name, email: email, passcode: APP_PASSWORD }, { merge: true })
+      .catch((err) => console.warn(err));
+  });
 
   photoInputEl.addEventListener("change", () => {
     const file = photoInputEl.files[0];
